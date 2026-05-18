@@ -531,10 +531,12 @@ async function initAutocomplete() {
   const input = document.getElementById('searchInput');
   const box   = document.getElementById('suggestions');
 
-  input.addEventListener('input', () => {
+  const onSearchInput = () => {
     clearTimeout(sugDebounce);
     sugDebounce = setTimeout(() => showSuggestions(input.value.trim()), 200);
-  });
+  };
+  window.onSearchInput = onSearchInput;  // expose globally for remove/add
+  input.addEventListener('input', onSearchInput);
 
   input.addEventListener('keydown', e => {
     const items = box.querySelectorAll('.sug-item');
@@ -588,7 +590,7 @@ async function showSuggestions(q) {
       }
     } catch(e) {}
   } else {
-    // Cours d'eau : filtrage local depuis csvData, includes + insensible accents/casse
+    // Cours d'eau : filtrage local depuis csvData (stations_debits.csv)
     if (csvData && Object.keys(csvData).length > 0) {
       const seen = new Set();
       for (const st of Object.values(csvData)) {
@@ -596,18 +598,20 @@ async function showSuggestions(q) {
         if (name && !seen.has(name) && normalize(name).includes(qn)) {
           seen.add(name);
           items.push({ label: name, value: name });
-          if (items.length >= 10) break;
+          // Pas de break ici — on parcourt tout pour avoir les meilleurs résultats
         }
       }
+      // Tri : priorité aux noms qui commencent par la saisie, puis alphabétique
       items.sort((a,b) => {
-        // Priorité : commence par la saisie > contient la saisie
         const an = normalize(a.label), bn = normalize(b.label);
         const aStart = an.startsWith(qn), bStart = bn.startsWith(qn);
         if (aStart && !bStart) return -1;
         if (!aStart && bStart) return 1;
         return a.label.localeCompare(b.label, 'fr');
       });
+      items = items.slice(0, 10);
     }
+    // Si csvData pas encore chargé → pas de suggestions (pas d'appel API)
   }
 
   if (!items.length) { hideSuggestions(); return; }
@@ -635,8 +639,13 @@ async function showSuggestions(q) {
 function selectSuggestion(idx) {
   const val = sugStore[idx];
   if (!val) return;
-  document.getElementById('searchInput').value = val;
+  clearTimeout(sugDebounce);   // annule tout debounce en cours
   hideSuggestions();
+  const input = document.getElementById('searchInput');
+  // Bloque temporairement l'autocomplete pendant qu'on écrit la valeur
+  input.removeEventListener('input', window.onSearchInput);
+  input.value = val;
+  requestAnimationFrame(() => input.addEventListener('input', window.onSearchInput));
   handleSearch();
 }
 
