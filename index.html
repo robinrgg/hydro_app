@@ -512,7 +512,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ── AUTOCOMPLETE ──────────────────────────────────────────
-let communesList = [];   // loaded from communes.csv
+let sugStore = [];  // stores suggestion values, referenced by index in onclick
+
+
 let sugIndex = -1;       // keyboard navigation index
 let sugDebounce = null;
 
@@ -610,26 +612,29 @@ async function showSuggestions(q) {
 
   if (!items.length) { hideSuggestions(); return; }
 
-  box.innerHTML = items.map(item => {
-    // Surligner la partie correspondante dans le label (insensible accents/casse)
+  sugStore = items.map(i => i.value);
+
+  box.innerHTML = items.map((item, idx) => {
     const labelN = normalize(item.label);
-    const idx = labelN.indexOf(qn);
+    const qnIdx  = labelN.indexOf(qn);
     let highlighted;
-    if (idx >= 0) {
-      highlighted = esc(item.label.slice(0,idx))
-        + `<span class="sug-match">${esc(item.label.slice(idx, idx+q.length))}</span>`
-        + esc(item.label.slice(idx+q.length));
+    if (qnIdx >= 0) {
+      highlighted = esc(item.label.slice(0, qnIdx))
+        + `<span class="sug-match">${esc(item.label.slice(qnIdx, qnIdx+q.length))}</span>`
+        + esc(item.label.slice(qnIdx+q.length));
     } else {
       highlighted = esc(item.label);
     }
-    return `<div class="sug-item" onmousedown="selectSuggestion('${esc(item.value)}')">${highlighted}</div>`;
+    return `<div class="sug-item" onmousedown="selectSuggestion(${idx})">${highlighted}</div>`;
   }).join('');
 
   sugIndex = -1;
   box.classList.add('show');
 }
 
-function selectSuggestion(val) {
+function selectSuggestion(idx) {
+  const val = sugStore[idx];
+  if (!val) return;
   document.getElementById('searchInput').value = val;
   hideSuggestions();
   handleSearch();
