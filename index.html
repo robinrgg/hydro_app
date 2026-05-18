@@ -586,12 +586,11 @@ async function showSuggestions(q) {
       }
     } catch(e) {}
   } else {
-    // Hub'eau API — recherche insensible accents/casse côté serveur
-    try {
-      const d = await hubGet(`${HUBEAU}/referentiel/stations?libelle_cours_eau=${enc(q)}&en_service=true&fields=libelle_cours_eau&size=200`);
+    // Cours d'eau : filtrage local depuis csvData, includes + insensible accents/casse
+    if (csvData && Object.keys(csvData).length > 0) {
       const seen = new Set();
-      for (const s of (d.data||[])) {
-        const name = s.libelle_cours_eau;
+      for (const st of Object.values(csvData)) {
+        const name = st.libelle_cours_eau;
         if (name && !seen.has(name) && normalize(name).includes(qn)) {
           seen.add(name);
           items.push({ label: name, value: name });
@@ -599,13 +598,14 @@ async function showSuggestions(q) {
         }
       }
       items.sort((a,b) => {
+        // Priorité : commence par la saisie > contient la saisie
         const an = normalize(a.label), bn = normalize(b.label);
         const aStart = an.startsWith(qn), bStart = bn.startsWith(qn);
         if (aStart && !bStart) return -1;
         if (!aStart && bStart) return 1;
         return a.label.localeCompare(b.label, 'fr');
       });
-    } catch(e) {}
+    }
   }
 
   if (!items.length) { hideSuggestions(); return; }
