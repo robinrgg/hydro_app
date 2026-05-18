@@ -382,7 +382,7 @@
   <div class="brand">
     <div class="brand-icon">💧</div>
     <div>
-      <div class="brand-name">Bilan Hydro-Météo &nbsp;<span>Aquascop</span></div>
+      <div class="brand-name">Bilan Hydro-Météo</div>
       <div class="brand-sub">Hub'eau · Open-Meteo · AROME / ECMWF</div>
     </div>
   </div>
@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const r = await fetch('./stations_debits.csv');
     if (r.ok) csvData = parseCSV(await r.text());
   } catch(e) {}
-}
+});
 
 // ── AUTOCOMPLETE ──────────────────────────────────────────
 let communesList = [];   // loaded from communes.csv
