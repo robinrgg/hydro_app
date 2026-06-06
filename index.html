@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <!-- Icône écran d'accueil -->
   <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDBiNGQ4Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwNzdiNiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSI5NiIgcnk9Ijk2IiBmaWxsPSJ1cmwoI2cpIi8+CiAgPHRleHQgeD0iMjU2IiB5PSIzNDAiIGZvbnQtc2l6ZT0iMjgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXBwbGUgQ29sb3IgRW1vamksU2Vnb2UgVUkgRW1vamksTm90byBDb2xvciBFbW9qaSxzYW5zLXNlcmlmIj7wn5KnPC90ZXh0Pgo8L3N2Zz4=">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2300b4d8'/><stop offset='100%25' stop-color='%230077b6'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='url(%23g)'/><text y='.9em' font-size='80' text-anchor='middle' x='50' font-family='Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif'>💧</text></svg>">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="HydroMétéo">
@@ -512,9 +513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ── AUTOCOMPLETE ──────────────────────────────────────────
-let sugStore = [];  // stores suggestion values, referenced by index in onclick
-
-
+let communesList = [];   // loaded from communes.csv
 let sugIndex = -1;       // keyboard navigation index
 let sugDebounce = null;
 
@@ -531,12 +530,10 @@ async function initAutocomplete() {
   const input = document.getElementById('searchInput');
   const box   = document.getElementById('suggestions');
 
-  const onSearchInput = () => {
+  input.addEventListener('input', () => {
     clearTimeout(sugDebounce);
     sugDebounce = setTimeout(() => showSuggestions(input.value.trim()), 200);
-  };
-  window.onSearchInput = onSearchInput;  // expose globally for remove/add
-  input.addEventListener('input', onSearchInput);
+  });
 
   input.addEventListener('keydown', e => {
     const items = box.querySelectorAll('.sug-item');
@@ -590,7 +587,7 @@ async function showSuggestions(q) {
       }
     } catch(e) {}
   } else {
-    // Cours d'eau : filtrage local depuis csvData (stations_debits.csv)
+    // Cours d'eau : filtrage local depuis csvData, includes + insensible accents/casse
     if (csvData && Object.keys(csvData).length > 0) {
       const seen = new Set();
       for (const st of Object.values(csvData)) {
@@ -598,54 +595,44 @@ async function showSuggestions(q) {
         if (name && !seen.has(name) && normalize(name).includes(qn)) {
           seen.add(name);
           items.push({ label: name, value: name });
-          // Pas de break ici — on parcourt tout pour avoir les meilleurs résultats
+          if (items.length >= 10) break;
         }
       }
-      // Tri : priorité aux noms qui commencent par la saisie, puis alphabétique
       items.sort((a,b) => {
+        // Priorité : commence par la saisie > contient la saisie
         const an = normalize(a.label), bn = normalize(b.label);
         const aStart = an.startsWith(qn), bStart = bn.startsWith(qn);
         if (aStart && !bStart) return -1;
         if (!aStart && bStart) return 1;
         return a.label.localeCompare(b.label, 'fr');
       });
-      items = items.slice(0, 10);
     }
-    // Si csvData pas encore chargé → pas de suggestions (pas d'appel API)
   }
 
   if (!items.length) { hideSuggestions(); return; }
 
-  sugStore = items.map(i => i.value);
-
-  box.innerHTML = items.map((item, idx) => {
+  box.innerHTML = items.map(item => {
+    // Surligner la partie correspondante dans le label (insensible accents/casse)
     const labelN = normalize(item.label);
-    const qnIdx  = labelN.indexOf(qn);
+    const idx = labelN.indexOf(qn);
     let highlighted;
-    if (qnIdx >= 0) {
-      highlighted = esc(item.label.slice(0, qnIdx))
-        + `<span class="sug-match">${esc(item.label.slice(qnIdx, qnIdx+q.length))}</span>`
-        + esc(item.label.slice(qnIdx+q.length));
+    if (idx >= 0) {
+      highlighted = esc(item.label.slice(0,idx))
+        + `<span class="sug-match">${esc(item.label.slice(idx, idx+q.length))}</span>`
+        + esc(item.label.slice(idx+q.length));
     } else {
       highlighted = esc(item.label);
     }
-    return `<div class="sug-item" onmousedown="selectSuggestion(${idx})">${highlighted}</div>`;
+    return `<div class="sug-item" onmousedown="selectSuggestion('${esc(item.value)}')">${highlighted}</div>`;
   }).join('');
 
   sugIndex = -1;
   box.classList.add('show');
 }
 
-function selectSuggestion(idx) {
-  const val = sugStore[idx];
-  if (!val) return;
-  clearTimeout(sugDebounce);   // annule tout debounce en cours
+function selectSuggestion(val) {
+  document.getElementById('searchInput').value = val;
   hideSuggestions();
-  const input = document.getElementById('searchInput');
-  // Bloque temporairement l'autocomplete pendant qu'on écrit la valeur
-  input.removeEventListener('input', window.onSearchInput);
-  input.value = val;
-  requestAnimationFrame(() => input.addEventListener('input', window.onSearchInput));
   handleSearch();
 }
 
